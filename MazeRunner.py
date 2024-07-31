@@ -1,52 +1,55 @@
-# MazeRunner.py
-
 import sys
 import random
-import pyamaze as maze
-from GameSearch import GameSearch
+from pyamaze import maze, agent, COLOR
+from GameSearch import Minimax, AlphaBeta
 
 def main(player, search_method, size):
-    m_size = (10, 10) if size == 10 else (20, 30)
-    m = maze.maze(*m_size)
-    m.CreateMaze(loopPercent=100, theme=maze.COLOR.light)
+    if size == 10:
+        m = maze(10, 10)
+    else:
+        m = maze(20, 30)
 
-    # Ensure random positions are within the maze bounds
-    def random_open_position():
-        while True:
-            pos = (random.randint(1, m.rows), random.randint(1, m.cols))
-            if m.maze_map[pos]['E'] or m.maze_map[pos]['W'] or m.maze_map[pos]['N'] or m.maze_map[pos]['S']:
-                return pos
+    m.CreateMaze(loopPercent=100)
+    
+    max_start = (random.randint(1, m.rows), random.randint(1, m.cols))
+    min_start = (random.randint(1, m.rows), random.randint(1, m.cols))
+    
+    print(f"Max agent starting position: {max_start}")
+    print(f"Min agent starting position: {min_start}")
 
-    max_pos = random_open_position()
-    min_pos = random_open_position()
-    goal_pos = random_open_position()
-
-    max_player = maze.agent(m, max_pos[0], max_pos[1], shape='arrow', footprints=True)
-    min_player = maze.agent(m, min_pos[0], min_pos[1], shape='square', footprints=True, color=maze.COLOR.red)
-
-    game = GameSearch(m, max_pos, min_pos, goal_pos)
-
+    max_agent = agent(m, max_start[0], max_start[1], shape='arrow', footprints=True, color=COLOR.blue)
+    min_agent = agent(m, min_start[0], min_start[1], shape='arrow', footprints=True, color=COLOR.red)
+    
     if search_method == 'MM':
-        print("Using Minimax")
-        eval, max_path = game.minimax(depth=3, player=max_pos, alpha=float('-inf'), beta=float('inf'), maximizing_player=True)
+        game_search = Minimax(m, max_agent, min_agent, search_method, player)
     elif search_method == 'AB':
-        print("Using Minimax with Alpha-Beta Pruning")
-        eval, max_path = game.minimax(depth=3, player=max_pos, alpha=float('-inf'), beta=float('inf'), maximizing_player=True)
-
-    max_moves = ''.join(max_path)
-    min_moves = ''.join(random.choices(['N', 'E', 'S', 'W'], k=10))  # Random moves for MIN player
-
-    m.tracePath({max_player: max_moves})
-    m.tracePath({min_player: min_moves})
-    m.run()
+        game_search = AlphaBeta(m, max_agent, min_agent, search_method, player)
+    else:
+        print("Invalid search method. Please use 'MM' for Minimax or 'AB' for AlphaBeta.")
+        sys.exit(1)
+    
+    print("Starting game...")
+    game_search.start_game(player)
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
         print("Usage: MazeRunner.py [player] [searchmethod] [size]")
         sys.exit(1)
-
-    player = int(sys.argv[1])
-    search_method = sys.argv[2]
-    size = int(sys.argv[3])
-
-    main(player, search_method, size)
+    
+    try:
+        player = int(sys.argv[1])
+        if player not in [1, 2]:
+            raise ValueError("Player must be 1 or 2.")
+        
+        search_method = sys.argv[2]
+        if search_method not in ['MM', 'AB']:
+            raise ValueError("Search method must be 'MM' for Minimax or 'AB' for AlphaBeta.")
+        
+        size = int(sys.argv[3])
+        if size not in [10, 20, 30]:  # Assuming only these sizes are valid
+            raise ValueError("Size must be 10, 20, or 30.")
+        
+        main(player, search_method, size)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)

@@ -1,3 +1,5 @@
+import math
+
 class GameSearch:
     def __init__(self, maze, max_agent, min_agent, search_method, player):
         self.maze = maze
@@ -5,117 +7,181 @@ class GameSearch:
         self.min_agent = min_agent
         self.search_method = search_method
         self.player = player
-        self.goal = self.set_goal()
+        self.goal = (self.maze.rows, self.maze.cols)
+        self.path = {max_agent: [(max_agent.x, max_agent.y)], min_agent: [(min_agent.x, min_agent.y)]}
 
-    def set_goal(self):
-        while True:
-            goal = (random.randint(1, self.maze.rows), random.randint(1, self.maze.cols))
-            if goal != self.max_agent.position and goal != self.min_agent.position:
-                return goal
+    def is_terminal_state(self):
+        return (self.max_agent.x == self.goal[0] and self.max_agent.y == self.goal[1]) or \
+               (self.min_agent.x == self.goal[0] and self.min_agent.y == self.goal[1])
 
-    def is_terminal(self, node):
-        max_pos, min_pos = node
-        return max_pos == self.goal or min_pos == self.goal
+    def update_display(self):
+        print(f"Updating display...")
+        print(f"Max agent position: ({self.max_agent.x}, {self.max_agent.y})")
+        print(f"Min agent position: ({self.min_agent.x}, {self.min_agent.y})")
+        print(f"Max agent path: {self.path[self.max_agent]}")
+        print(f"Min agent path: {self.path[self.min_agent]}")
+        self.maze.tracePath({self.max_agent: self.path[self.max_agent], self.min_agent: self.path[self.min_agent]}, delay=100)
 
-    def evaluate(self, node):
-        max_pos, min_pos = node
-        if max_pos == self.goal:
-            return 100
-        elif min_pos == self.goal:
-            return -100
-        max_dist = abs(max_pos[0] - self.goal[0]) + abs(max_pos[1] - self.goal[1])
-        min_dist = abs(min_pos[0] - self.goal[0]) + abs(min_pos[1] - self.goal[1])
-        return min_dist - max_dist
+    def apply_move(self, move, agent):
+        print(f"Applying move {move} for agent at position ({agent.x}, {agent.y})")
+        if move == 'U':
+            agent.moveUp()
+        elif move == 'D':
+            agent.moveDown()
+        elif move == 'L':
+            agent.moveLeft()
+        elif move == 'R':
+            agent.moveRight()
+        new_position = (agent.x, agent.y)
+        print(f"New position of agent: {new_position}")
+        self.path[agent].append(new_position)
+        self.update_display()
 
-    def get_children(self, node, player):
-        max_pos, min_pos = node
-        children = []
-        
-        if player == 'MAX':
-            possible_moves = self.maze.get_neighbors(max_pos[0], max_pos[1])
-            for move in possible_moves:
-                if 1 <= move[0] <= self.maze.rows and 1 <= move[1] <= self.maze.cols:
-                    children.append(((move[0], move[1]), min_pos))
-        else:
-            possible_moves = self.maze.get_neighbors(min_pos[0], min_pos[1])
-            for move in possible_moves:
-                if 1 <= move[0] <= self.maze.rows and 1 <= move[1] <= self.maze.cols:
-                    children.append((max_pos, (move[0], move[1])))
-        
-        return children
+    def get_valid_moves(self, agent):
+        moves = []
+        cell = self.maze.maze_map[(agent.x, agent.y)]
+        if cell.get('U', False):
+            moves.append('U')
+        if cell.get('D', False):
+            moves.append('D')
+        if cell.get('L', False):
+            moves.append('L')
+        if cell.get('R', False):
+            moves.append('R')
+        return moves
 
     def minimax(self, node, depth, maximizing_player):
-        if depth == 0 or self.is_terminal(node):
-            return self.evaluate(node)
-        
+        if depth == 0 or self.is_terminal_state():
+            return self.evaluate_state(node)
+
+        valid_moves = self.get_valid_moves(node)
         if maximizing_player:
-            max_eval = float('-inf')
-            for child in self.get_children(node, 'MAX'):
-                eval = self.minimax(child, depth - 1, False)
-                max_eval = max(max_eval, eval)
-            return max_eval
+            max_eval = -math.inf
+            best_move = None
+            for move in valid_moves:
+                self.apply_move(move, node)
+                eval = self.minimax(node, depth - 1, False)
+                self.undo_move(move, node)
+                if eval > max_eval:
+                    max_eval = eval
+                    best_move = move
+            return best_move if depth == 3 else max_eval
         else:
-            min_eval = float('inf')
-            for child in self.get_children(node, 'MIN'):
-                eval = self.minimax(child, depth - 1, True)
-                min_eval = min(min_eval, eval)
-            return min_eval
+            min_eval = math.inf
+            best_move = None
+            for move in valid_moves:
+                self.apply_move(move, node)
+                eval = self.minimax(node, depth - 1, True)
+                self.undo_move(move, node)
+                if eval < min_eval:
+                    min_eval = eval
+                    best_move = move
+            return best_move if depth == 3 else min_eval
 
     def alpha_beta(self, node, depth, alpha, beta, maximizing_player):
-        if depth == 0 or self.is_terminal(node):
-            return self.evaluate(node)
-        
+        if depth == 0 or self.is_terminal_state():
+            return self.evaluate_state(node)
+
+        valid_moves = self.get_valid_moves(node)
         if maximizing_player:
-            max_eval = float('-inf')
-            for child in self.get_children(node, 'MAX'):
-                eval = self.alpha_beta(child, depth - 1, alpha, beta, False)
-                max_eval = max(max_eval, eval)
+            max_eval = -math.inf
+            best_move = None
+            for move in valid_moves:
+                self.apply_move(move, node)
+                eval = self.alpha_beta(node, depth - 1, alpha, beta, False)
+                self.undo_move(move, node)
+                if eval > max_eval:
+                    max_eval = eval
+                    best_move = move
                 alpha = max(alpha, eval)
                 if beta <= alpha:
                     break
-            return max_eval
+            return best_move if depth == 3 else max_eval
         else:
-            min_eval = float('inf')
-            for child in self.get_children(node, 'MIN'):
-                eval = self.alpha_beta(child, depth - 1, alpha, beta, True)
-                min_eval = min(min_eval, eval)
+            min_eval = math.inf
+            best_move = None
+            for move in valid_moves:
+                self.apply_move(move, node)
+                eval = self.alpha_beta(node, depth - 1, alpha, beta, True)
+                self.undo_move(move, node)
+                if eval < min_eval:
+                    min_eval = eval
+                    best_move = move
                 beta = min(beta, eval)
                 if beta <= alpha:
                     break
-            return min_eval
+            return best_move if depth == 3 else min_eval
 
-    def start_game(self):
-        current_node = (self.max_agent.position, self.min_agent.position)
-        turn = 'MAX' if self.player == 1 else 'MIN'
-        
-        while not self.is_terminal(current_node):
-            if turn == 'MAX':
-                if self.search_method == 'MM':
-                    best_move = self.minimax(current_node, 3, True)  # Adjust depth as needed
-                else:
-                    best_move = self.alpha_beta(current_node, 3, float('-inf'), float('inf'), True)  # Adjust depth as needed
-                # Move the MAX agent to the best position
-                current_node = (best_move, current_node[1])
-                turn = 'MIN'
+    def evaluate_state(self, agent):
+        if agent.x == self.goal[0] and agent.y == self.goal[1]:
+            if agent == self.max_agent:
+                return 100
             else:
-                # Human player makes a move
-                print(f"Your turn. Current position: {current_node[1]}")
-                move = input("Enter your move (format: row,col): ")
-                try:
-                    move = tuple(map(int, move.split(',')))
-                    if move in self.maze.get_neighbors(current_node[1][0], current_node[1][1]):
-                        current_node = (current_node[0], move)
-                    else:
-                        print("Invalid move. Try again.")
-                        continue
-                except ValueError:
-                    print("Invalid input format. Use row,col.")
-                    continue
-                turn = 'MAX'
-            
-            print(f"Current state: {current_node}")
+                return -100
+        else:
+            max_distance = abs(self.max_agent.x - self.goal[0]) + abs(self.max_agent.y - self.goal[1])
+            min_distance = abs(self.min_agent.x - self.goal[0]) + abs(self.min_agent.y - self.goal[1])
+            return min_distance - max_distance
+
+    def undo_move(self, move, agent):
+        print(f"Undoing move {move} for agent at position ({agent.x}, {agent.y})")
+        if move == 'U':
+            agent.moveDown()
+        elif move == 'D':
+            agent.moveUp()
+        elif move == 'L':
+            agent.moveRight()
+        elif move == 'R':
+            agent.moveLeft()
+        self.path[agent].pop()
+        self.update_display()
+
+class Minimax(GameSearch):
+    def start_game(self, player):
+        while not self.is_terminal_state():
+            if player == 1:
+                best_move = self.minimax(self.max_agent, 3, True)
+                if best_move:
+                    self.apply_move(best_move, self.max_agent)
+                print(f"MAX moved: ({self.max_agent.x},{self.max_agent.y})")
+                self.update_display()
+                player = 2
+            else:
+                print("It is MIN's turn:")
+                row = int(input("Enter the row: "))
+                col = int(input("Enter the column: "))
+                self.min_agent.x = row
+                self.min_agent.y = col
+                self.path[self.min_agent].append((self.min_agent.x, self.min_agent.y))
+                self.update_display()
+                player = 1
         
-        if current_node[0] == self.goal:
+        if self.max_agent.x == self.goal[0] and self.max_agent.y == self.goal[1]:
+            print("AI (MAX) wins!")
+        else:
+            print("Human (MIN) wins!")
+
+class AlphaBeta(GameSearch):
+    def start_game(self, player):
+        while not self.is_terminal_state():
+            if player == 1:
+                best_move = self.alpha_beta(self.max_agent, 3, -math.inf, math.inf, True)
+                if best_move:
+                    self.apply_move(best_move, self.max_agent)
+                print(f"MAX moved: ({self.max_agent.x},{self.max_agent.y})")
+                self.update_display()
+                player = 2
+            else:
+                print("It is MIN's turn:")
+                row = int(input("Enter the row: "))
+                col = int(input("Enter the column: "))
+                self.min_agent.x = row
+                self.min_agent.y = col
+                self.path[self.min_agent].append((self.min_agent.x, self.min_agent.y))
+                self.update_display()
+                player = 1
+        
+        if self.max_agent.x == self.goal[0] and self.max_agent.y == self.goal[1]:
             print("AI (MAX) wins!")
         else:
             print("Human (MIN) wins!")
